@@ -2,8 +2,7 @@ import express from "express";
 import { config } from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import fileUpload from "express-fileupload";
-import { errorMiddleware } from "./middlewares/errorMiddleware.js";
+import { errorHandler } from "./middlewares/errorMiddleware.js";
 import { dbConfig } from "./config/db.js";
 import { dbConnection } from "./database/dbConnection.js";
 
@@ -37,12 +36,6 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(
-  fileUpload({
-    useTempFiles: true,
-    tempFileDir: "/tmp/",
-  })
-);
 
 // Log to confirm authRoutes are imported
 console.log("Auth Routes Imported:", authRoutes ? "Success" : "Failed");
@@ -57,7 +50,7 @@ app.use("/api/v1/transaction", transactionRoutes);
 app.use("/api/v1/budget", budgetRoutes);
 app.use("/api/v1/prediction", predictionRoutes);
 app.use("/api/v1/goal", goalRoutes);
-app.use("/api/v1/pdf-analysis", pdfAnalysisRoutes);
+app.use("/api/v1/pdf", pdfAnalysisRoutes);
 app.use("/api/v1/payment", paymentRoutes);
 
 // Log to confirm authRoutes are mounted
@@ -67,7 +60,7 @@ console.log("Auth Routes Mounted at /api/auth");
 dbConnection();
 
 // Error Middleware
-app.use(errorMiddleware);
+app.use(errorHandler);
 
 // Export the app
 export default app;

@@ -6,3 +6,19 @@ config/
 
 .env
 config/config.env
+config/*.env
+
+# Add this line to your .gitignore
+uploads/*
+!uploads/.gitkeep
+
+# Add this line
+config/google-credentials.json
+
+# API Keys and Credentials
+*.pem
+*.key
+
+# Ignore test data but keep the folder
+test/data/*
+!test/data/.gitkeep

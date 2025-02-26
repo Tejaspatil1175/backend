@@ -7,13 +7,13 @@ const budgetSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    category: {
-      type: String,
-      required: [true, "Please enter the budget category"],
-    },
     amount: {
       type: Number,
-      required: [true, "Please enter the budget amount"],
+      required: true,
+    },
+    category: {
+      type: String,
+      required: true,
     },
     startDate: {
       type: Date,
@@ -28,6 +28,13 @@ const budgetSchema = new mongoose.Schema(
       enum: ["active", "exceeded", "completed"],
       default: "active",
     },
+    transactions: [
+      {
+        amount: { type: Number, required: true },
+        category: { type: String, required: true },
+        date: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );
