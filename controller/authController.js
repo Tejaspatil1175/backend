@@ -6,18 +6,23 @@ console.log("JWT Secret:", process.env.JWT_SECRET_KEY ? "Loaded" : "Missing");
 
 export const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { firstName, lastName, middleName, email, contact, birthDate, password } = req.body;
 
+    // Check if user already exists
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // Store password directly (not recommended for production)
+    // Create new user
     const user = await User.create({
-      name,
+      firstName,
+      lastName,
+      middleName,
       email,
-      password, // Store plain text password
+      contact,
+      birthDate,
+      password, // Store plain text password (not recommended for production)
     });
 
     res.status(201).json({ success: true, user });
