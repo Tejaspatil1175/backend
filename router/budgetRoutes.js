@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.post("/set", isAuthenticated, addBudget);
 router.get("/", isAuthenticated, getBudgets);
-router.put("/update/:id", isAuthenticated, updateBudget);
+router.put("/update/:budgetId", isAuthenticated, updateBudget);
 router.delete("/delete/:id", isAuthenticated, deleteBudget);
 router.get("/status", isAuthenticated, checkBudgetStatus);
 

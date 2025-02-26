@@ -9,7 +9,7 @@ console.log("Register User Function Imported:", registerUser ? "Success" : "Fail
 
 router.post("/register", registerUser);
 router.post("/login", loginUser);
-router.post("/logout", logoutUser);
+router.post("/logout", isAuthenticated, logoutUser);
 router.get("/me", isAuthenticated, getUserDetails);
 
 // Example: Admin-only route

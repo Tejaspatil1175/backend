@@ -2,13 +2,15 @@ import Budget from "../models/budgetModel.js";
 
 export const addBudget = async (req, res) => {
   try {
-    const { userId, amount, category } = req.body;
+    const { amount, category } = req.body;
+    const userId = req.user.id;
 
-    const budget = await Budget.create({
-      user: userId,
-      amount,
-      category,
-    });
+    // Create or update budget
+    const budget = await Budget.findOneAndUpdate(
+      { user: userId },
+      { amount, category },
+      { new: true, upsert: true }
+    );
 
     res.status(201).json({ success: true, budget });
   } catch (error) {
@@ -47,13 +49,25 @@ export const checkBudgetStatus = async (req, res) => {
 
 export const deleteBudget = async (req, res) => {
   try {
-    const { budgetId } = req.params;
+    const { id } = req.params;
 
-    const budget = await Budget.findByIdAndDelete(budgetId);
-    if (!budget) return res.status(404).json({ success: false, message: "Budget not found" });
+    // Log the budget ID
+    console.log("Deleting budget with ID:", id);
 
+    // Log the database query
+    console.log("Searching for budget in database...");
+
+    const budget = await Budget.findByIdAndDelete(id);
+
+    if (!budget) {
+      console.log("Budget not found in database");
+      return res.status(404).json({ success: false, message: "Budget not found" });
+    }
+
+    console.log("Budget deleted successfully:", budget);
     res.status(200).json({ success: true, message: "Budget deleted successfully" });
   } catch (error) {
+    console.error("Error deleting budget:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -63,16 +77,27 @@ export const updateBudget = async (req, res) => {
     const { budgetId } = req.params;
     const { amount, category } = req.body;
 
+    // Log the budget ID
+    console.log("Updating budget with ID:", budgetId);
+
+    // Log the database query
+    console.log("Searching for budget in database...");
+
     const budget = await Budget.findByIdAndUpdate(
       budgetId,
       { amount, category },
       { new: true }
     );
 
-    if (!budget) return res.status(404).json({ success: false, message: "Budget not found" });
+    if (!budget) {
+      console.log("Budget not found in database");
+      return res.status(404).json({ success: false, message: "Budget not found" });
+    }
 
+    console.log("Budget updated successfully:", budget);
     res.status(200).json({ success: true, message: "Budget updated successfully", budget });
   } catch (error) {
+    console.error("Error updating budget:", error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };
