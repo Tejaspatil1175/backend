@@ -1,28 +1,36 @@
 import jwt from "jsonwebtoken";
-import { User } from "../models/userModel.js";
+import User from "../models/userModel.js";
 
 export const isAuthenticated = async (req, res, next) => {
   try {
-    // Get token from Authorization header
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Unauthorized access" });
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first"
+      });
     }
 
-    const token = authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
+    const token = authHeader.split(' ')[1];
 
-    // Verify token
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first"
+      });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
-    req.user = await User.findById(decoded.id);
 
-    if (!req.user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    req.user = await User.findById(decoded.id);
 
     next();
   } catch (error) {
-    console.error("Authentication error:", error.message);
-    res.status(401).json({ message: "Invalid token" });
+    res.status(401).json({
+      success: false,
+      message: "Authentication failed"
+    });
   }
 };
 
@@ -35,4 +43,21 @@ export const authorizeRoles = (...roles) => {
     }
     next();
   };
+};
+
+export const isAdmin = async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied: Admin only"
+      });
+    }
+    next();
+  } catch (error) {
+    res.status(403).json({
+      success: false,
+      message: "Access denied"
+    });
+  }
 };

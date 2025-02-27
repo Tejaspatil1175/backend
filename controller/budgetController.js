@@ -6,6 +6,8 @@ import { v2 as cloudinary } from "cloudinary";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import sharp from 'sharp';
+import Transaction from "../models/transactionModel.js";
+import { scanReceipt } from "../utils/receiptScanner.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,10 +46,109 @@ export const addBudget = async (req, res) => {
 
 export const getBudgets = async (req, res) => {
   try {
-    const budgets = await Budget.find({ user: req.user.id });
-    res.status(200).json({ success: true, budgets });
+    const { month, year } = req.query;
+    const currentDate = new Date();
+    const selectedMonth = month || currentDate.getMonth() + 1;
+    const selectedYear = year || currentDate.getFullYear();
+
+    // Get budgets
+    const budgets = await Budget.find({
+      user: req.user.id,
+      month: selectedMonth,
+      year: selectedYear
+    }).sort({ category: 1 });
+
+    // Get transactions for the month
+    const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+    const endDate = new Date(selectedYear, selectedMonth, 0);
+
+    const transactions = await Transaction.find({
+      user: req.user.id,
+      type: "expense",
+      date: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    });
+
+    // Calculate spending by category
+    const spending = transactions.reduce((acc, transaction) => {
+      if (!acc[transaction.category]) {
+        acc[transaction.category] = 0;
+      }
+      acc[transaction.category] += transaction.amount;
+      return acc;
+    }, {});
+
+    // Get scanned receipts data
+    const scannedReceipts = await Transaction.find({
+      user: req.user.id,
+      type: "expense",
+      date: {
+        $gte: startDate,
+        $lte: endDate
+      },
+      isScanned: true
+    }).sort({ date: -1 });
+
+    // Format budget data with spending
+    const budgetData = budgets.map(budget => ({
+      _id: budget._id,
+      category: budget.category,
+      limit: budget.limit,
+      spent: spending[budget.category] || 0,
+      remaining: budget.limit - (spending[budget.category] || 0),
+      progress: ((spending[budget.category] || 0) / budget.limit * 100).toFixed(2)
+    }));
+
+    // Calculate totals
+    const totalBudget = budgets.reduce((sum, budget) => sum + budget.limit, 0);
+    const totalSpent = Object.values(spending).reduce((sum, amount) => sum + amount, 0);
+
+    // Group scanned receipts by store/vendor
+    const receiptsByVendor = scannedReceipts.reduce((acc, receipt) => {
+      if (!acc[receipt.vendor]) {
+        acc[receipt.vendor] = {
+          total: 0,
+          count: 0,
+          items: []
+        };
+      }
+      acc[receipt.vendor].total += receipt.amount;
+      acc[receipt.vendor].count++;
+      acc[receipt.vendor].items.push({
+        date: receipt.date,
+        amount: receipt.amount,
+        items: receipt.items
+      });
+      return acc;
+    }, {});
+
+    res.status(200).json({
+      success: true,
+      month: selectedMonth,
+      year: selectedYear,
+      overview: {
+        totalBudget,
+        totalSpent,
+        remaining: totalBudget - totalSpent,
+        progress: ((totalSpent / totalBudget) * 100).toFixed(2)
+      },
+      budgets: budgetData,
+      spending,
+      scannedData: {
+        totalReceipts: scannedReceipts.length,
+        totalAmount: scannedReceipts.reduce((sum, r) => sum + r.amount, 0),
+        byVendor: receiptsByVendor
+      }
+    });
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching budget data",
+      error: error.message
+    });
   }
 };
 

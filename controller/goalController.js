@@ -1,99 +1,156 @@
 import Goal from "../models/goalModel.js";
-import { calculateGoalTimeline } from "../utils/aiModel.js";
 
-export const createGoal = async (req, res) => {
+export const addGoal = async (req, res) => {
   try {
-    const { userId, goalName, targetAmount, currentSavings, monthlyContribution } = req.body;
+    const { 
+      title, 
+      targetAmount, 
+      category, 
+      description, 
+      deadline,
+      priority 
+    } = req.body;
 
-    if (!userId || !goalName || !targetAmount || !currentSavings || !monthlyContribution) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
+    // Validate required fields
+    if (!title || !targetAmount || !category || !deadline) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide title, target amount, category and deadline"
+      });
     }
 
-    const estimatedTime = calculateGoalTimeline(targetAmount, currentSavings, monthlyContribution);
-
-    const goal = new Goal({
-      user: userId,
-      goalName,
+    // Create new goal
+    const goal = await Goal.create({
+      user: req.user.id,
+      title,
       targetAmount,
-      currentSavings,
-      monthlyContribution,
-      estimatedTime,
+      category,
+      description,
+      deadline,
+      priority: priority || "Medium"
     });
 
-    await goal.save();
+    res.status(201).json({
+      success: true,
+      message: "Goal added successfully",
+      goal
+    });
 
-    res.status(201).json({ success: true, message: "Goal created successfully", goal });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error adding goal",
+      error: error.message
+    });
   }
 };
 
 export const getGoals = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { category, priority, status, sort = '-createdAt' } = req.query;
 
-    const goals = await Goal.find({ user: userId });
+    // Build query
+    const query = { user: req.user.id };
 
-    res.status(200).json({ success: true, goals });
+    // Add filters if provided
+    if (category) query.category = category;
+    if (priority) query.priority = priority;
+    if (status) query.status = status;
+
+    // Get goals with filters and sorting
+    const goals = await Goal.find(query)
+      .sort(sort)
+      .select('-__v');
+
+    // Calculate total target amount and current amount
+    const totalTarget = goals.reduce((sum, goal) => sum + goal.targetAmount, 0);
+    const totalCurrent = goals.reduce((sum, goal) => sum + goal.currentAmount, 0);
+
+    res.status(200).json({
+      success: true,
+      count: goals.length,
+      totalTarget,
+      totalCurrent,
+      progress: ((totalCurrent / totalTarget) * 100).toFixed(2) + '%',
+      goals
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Error fetching goals",
+      error: error.message 
+    });
   }
 };
 
 export const updateGoal = async (req, res) => {
   try {
-    const { goalId } = req.params;
-    const { currentSavings, monthlyContribution } = req.body;
-
-    let goal = await Goal.findById(goalId);
+    const goal = await Goal.findById(req.params.id);
 
     if (!goal) {
-      return res.status(404).json({ success: false, message: "Goal not found" });
+      return res.status(404).json({ 
+        success: false, 
+        message: "Goal not found" 
+      });
     }
 
-    if (currentSavings) goal.currentSavings = currentSavings;
-    if (monthlyContribution) goal.monthlyContribution = monthlyContribution;
+    if (goal.user.toString() !== req.user.id) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "Not authorized" 
+      });
+    }
 
-    goal.estimatedTime = calculateGoalTimeline(goal.targetAmount, goal.currentSavings, goal.monthlyContribution);
+    const updatedGoal = await Goal.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
 
-    await goal.save();
-
-    res.status(200).json({ success: true, message: "Goal updated successfully", goal });
+    res.status(200).json({
+      success: true,
+      message: "Goal updated successfully",
+      goal: updatedGoal
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Error updating goal",
+      error: error.message 
+    });
   }
 };
 
 export const deleteGoal = async (req, res) => {
   try {
-    const { goalId } = req.params;
-
-    const goal = await Goal.findByIdAndDelete(goalId);
+    const goal = await Goal.findById(req.params.id);
 
     if (!goal) {
-      return res.status(404).json({ success: false, message: "Goal not found" });
+      return res.status(404).json({ 
+        success: false, 
+        message: "Goal not found" 
+      });
     }
 
-    res.status(200).json({ success: true, message: "Goal deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
+    if (goal.user.toString() !== req.user.id) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "Not authorized" 
+      });
+    }
 
-export const addGoal = async (req, res) => {
-  try {
-    const { userId, goalName, targetAmount, currentSavings, monthlyContribution } = req.body;
+    await goal.deleteOne();
 
-    const goal = await Goal.create({
-      user: userId,
-      goalName,
-      targetAmount,
-      currentSavings,
-      monthlyContribution,
+    res.status(200).json({
+      success: true,
+      message: "Goal deleted successfully"
     });
-
-    res.status(201).json({ success: true, goal });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Error deleting goal",
+      error: error.message 
+    });
   }
 };

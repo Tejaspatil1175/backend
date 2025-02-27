@@ -1,35 +1,87 @@
 import Income from "../models/incomeModel.js";
+import User from "../models/userModel.js";
 
 export const addIncome = async (req, res) => {
   try {
-    const { amount, source, date } = req.body;
+    const { title, amount, category, description, date, type, paymentMode } = req.body;
 
-    if (!amount || !source || !date) {
-      return res.status(400).json({ message: "All fields are required" });
+    // Validate required fields
+    if (!title || !amount || !category || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide title, amount, category and date"
+      });
     }
 
-    const income = new Income({
+    // Create new income
+    const income = await Income.create({
       user: req.user.id,
+      title,
       amount,
-      source,
+      category,
+      description,
       date,
+      type: type || 'one-time',
+      paymentMode: paymentMode || 'Cash'
     });
 
-    await income.save();
+    // Update user's total income
+    await User.findByIdAndUpdate(req.user.id, {
+      $inc: { income: amount }
+    });
 
-    res.status(201).json({ success: true, message: "Income added successfully", income });
+    res.status(201).json({
+      success: true,
+      message: "Income added successfully",
+      income
+    });
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error adding income",
+      error: error.message
+    });
   }
 };
 
 export const getIncomes = async (req, res) => {
   try {
-    const incomes = await Income.find({ user: req.user.id }).sort({ date: -1 });
+    const { category, type, startDate, endDate, sort = '-date' } = req.query;
 
-    res.status(200).json({ success: true, incomes });
+    // Build query
+    const query = { user: req.user.id };
+
+    // Add filters if provided
+    if (category) query.category = category;
+    if (type) query.type = type;
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = new Date(startDate);
+      if (endDate) query.date.$lte = new Date(endDate);
+    }
+
+    // Get incomes with filters and sorting
+    const incomes = await Income.find(query)
+      .sort(sort)
+      .select('-__v');
+
+    // Calculate total
+    const total = incomes.reduce((sum, income) => sum + income.amount, 0);
+
+    res.status(200).json({
+      success: true,
+      count: incomes.length,
+      total,
+      incomes
+    });
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching incomes",
+      error: error.message
+    });
   }
 };
 

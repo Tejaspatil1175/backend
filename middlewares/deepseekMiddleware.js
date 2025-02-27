@@ -23,66 +23,64 @@ export const analyzePDFWithDeepseek = async (req, res, next) => {
     console.log('Making request to local Deepseek with URL:', req.fileUrl);
 
     const userText = `
-      Analyze all charts and graphs in this PDF from URL: ${req.fileUrl}
+      You are a PhonePe statement analyzer. Parse this statement from URL: ${req.fileUrl}
 
-      For each chart/graph found, identify:
-      1. Chart type (pie chart, bar graph, line graph, etc.)
-      2. Categories and their values
-      3. Percentages or proportions
-      4. Labels and legends
-      5. Any trends or patterns
+      The statement contains transactions in this format:
+      - Date and Time (e.g., "Feb 27, 2025 01:37 am")
+      - Description (e.g., "Paid to Pramod Koli")
+      - Type (CREDIT/DEBIT)
+      - Amount (e.g., "₹50" or "₹1,003.54")
+      - Transaction ID and UTR No.
 
-      Return the data in this JSON format:
+      Convert the data into this JSON format:
       {
-        "charts": [
-          {
-            "type": "pie_chart/bar_graph/line_graph",
-            "title": "string",
-            "categories": [
-              {
-                "label": "string",
-                "value": number,
-                "percentage": number,
-                "color": "string (if available)"
-              }
-            ],
-            "total": number,
-            "insights": {
-              "largestSegment": "string",
-              "smallestSegment": "string",
-              "significantPatterns": ["string"]
-            }
-          }
-        ],
-        "timeBasedData": {
-          "period": "daily/monthly/yearly",
-          "dataPoints": [
-            {
-              "date": "YYYY-MM-DD",
-              "value": number,
-              "category": "string"
-            }
-          ],
-          "trends": {
-            "highestValue": number,
-            "lowestValue": number,
-            "averageValue": number,
-            "trend": "increasing/decreasing/stable"
+        "statementInfo": {
+          "phoneNumber": "string",
+          "period": {
+            "from": "YYYY-MM-DD",
+            "to": "YYYY-MM-DD"
           }
         },
-        "summary": {
-          "totalCharts": number,
-          "mainInsights": ["string"],
-          "recommendations": ["string"]
+        "transactions": [
+          {
+            "date": "YYYY-MM-DD",
+            "time": "HH:mm:ss",
+            "description": "string",
+            "type": "CREDIT/DEBIT",
+            "amount": number,
+            "transactionId": "string",
+            "utrNo": "string",
+            "category": "Food/Education/Transfer/Other"
+          }
+        ],
+        "dailySummary": [
+          {
+            "date": "YYYY-MM-DD",
+            "totalCredit": number,
+            "totalDebit": number,
+            "netAmount": number,
+            "transactionCount": number
+          }
+        ],
+        "overview": {
+          "totalCredit": number,
+          "totalDebit": number,
+          "netBalance": number,
+          "totalTransactions": number
         }
       }
 
-      IMPORTANT: 
-      1. Return only valid JSON
-      2. Include all visible data points
-      3. Calculate percentages for pie charts
-      4. Identify patterns and trends
-      5. Extract all labels and values accurately
+      Rules:
+      1. Convert all dates to YYYY-MM-DD format
+      2. Convert times to 24-hour format (HH:mm:ss)
+      3. Remove ₹ symbol and convert amounts to numbers
+      4. Remove commas from numbers
+      5. Categorize transactions:
+         - "ENGINEERING COLLEGE CANTEEN" -> Food
+         - "Unstop", "Swayam NPTEL" -> Education
+         - Received/Paid to individuals -> Transfer
+         - Others -> Other
+      6. Group transactions by date in dailySummary
     `;
 
     try {
@@ -93,7 +91,7 @@ export const analyzePDFWithDeepseek = async (req, res, next) => {
           model: "deepseek-r1:1.5b",
           prompt: userText,
           stream: false,
-          temperature: 0.3
+          temperature: 0.1
         })
       });
 
@@ -122,9 +120,9 @@ export const analyzePDFWithDeepseek = async (req, res, next) => {
       try {
         const parsedAnalysis = JSON.parse(jsonStr);
         
-        // Validate the structure
-        if (!parsedAnalysis.charts && !parsedAnalysis.timeBasedData) {
-          throw new Error('Invalid chart analysis structure');
+        // Basic validation
+        if (!parsedAnalysis.transactions || !parsedAnalysis.dailySummary || !parsedAnalysis.overview) {
+          throw new Error('Missing required data in analysis');
         }
 
         req.analysis = parsedAnalysis;
@@ -132,19 +130,19 @@ export const analyzePDFWithDeepseek = async (req, res, next) => {
       } catch (parseError) {
         console.error('Error parsing JSON:', parseError);
         console.error('Attempted to parse:', jsonStr);
-        throw new Error('Failed to parse chart analysis results');
+        throw new Error('Failed to parse transaction analysis');
       }
 
     } catch (fetchError) {
       console.error('Fetch error:', fetchError);
-      throw new Error(`Failed to analyze charts: ${fetchError.message}`);
+      throw new Error(`Failed to analyze transactions: ${fetchError.message}`);
     }
 
   } catch (error) {
     console.error("Analysis error:", error);
     return res.status(500).json({
       success: false,
-      message: "Error analyzing charts in PDF",
+      message: "Error analyzing transactions",
       error: error.message
     });
   }
